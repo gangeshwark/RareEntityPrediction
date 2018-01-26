@@ -60,12 +60,12 @@ def prepro_corpus(corpus_file, id_name, name_desc):
                         scd_sent = scd_sent.replace(sub_id, id_name[sub_id])
                     # store each record into dict
                     record = {
-                                'sentence': fst_sent,
-                                'supplementary': scd_sent,
-                                'candidates': candidates,
-                                'descriptions': descriptions,
-                                'answer': answer
-                             }
+                        'sentence': fst_sent,
+                        'supplementary': scd_sent,
+                        'candidates': candidates,
+                        'descriptions': descriptions,
+                        'answer': answer
+                    }
                     data.append(record)
     return data
 
