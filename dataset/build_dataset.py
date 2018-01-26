@@ -26,11 +26,11 @@ def prepro_entities(entity_file, dump_id_name=None, dump_name_desc=None):
             id_name[fb_id] = name
             name_desc[name] = desc
     if dump_id_name is not None:
-        with open(dump_id_name, 'w') as din:
-            pickle.dump(id_name, din)
+        with open(dump_id_name, 'w') as fi:
+            json.dump(id_name, fi)
     if dump_name_desc is not None:
-        with open(dump_name_desc, 'w') as dnd:
-            pickle.dump(name_desc, dnd)
+        with open(dump_name_desc, 'w') as fn:
+            json.dump(name_desc, fn)
     return id_name, name_desc
 
 
@@ -73,7 +73,7 @@ def prepro_corpus(corpus_file, id_name, name_desc):
 def main():
     entity_file = os.path.join(source_dir, 'entities.txt')
     corpus_file = os.path.join(source_dir, 'corpus.txt')
-    id_name, name_desc = prepro_entities(entity_file, dump_id_name='id_name.pk', dump_name_desc='name_desc.pk')
+    id_name, name_desc = prepro_entities(entity_file, dump_id_name='id_name.json', dump_name_desc='name_desc.json')
     print(len(id_name))
     data = prepro_corpus(corpus_file, id_name, name_desc)
     print(len(data))
