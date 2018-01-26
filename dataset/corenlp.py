@@ -8,6 +8,7 @@ class CoreNLP(object):
         cd <Stanford CoreNLP folder>
         nohup java -Xmx6g -cp "*" edu.stanford.nlp.pipeline.StanfordCoreNLPServer -port 9000 -timeout 15000 > log 2>&1&
     """
+
     def __init__(self, properties=None):
         self.properties = properties if properties is not None else {
             'annotators': 'tokenize,ssplit,pos,lemma',
