@@ -1,9 +1,8 @@
 import os
 import re
 from tqdm import tqdm
-from nltk import sent_tokenize, word_tokenize
+from nltk import sent_tokenize, word_tokenize, wordpunct_tokenize, regexp_tokenize
 import json
-import pickle
 from dataset.corenlp import CoreNLP
 
 corenlp = CoreNLP()  # not used
@@ -21,7 +20,7 @@ def prepro_entities(entity_file, dump_id_name=None, dump_name_desc=None):
     with open(entity_file, 'r', encoding='utf-8') as f:
         for line in tqdm(f, desc='process entities'):
             fb_id, *_, name, full_desc = line.strip().split('\t')
-            desc = sent_tokenize(full_desc, language='english')[0]
+            desc = sent_tokenize(full_desc, language='english')[0]  # NLTK sentence tokenization
             desc = ' '.join([token.replace("``", '"').replace("''", '"') for token in word_tokenize(desc)])
             id_name[fb_id] = name
             name_desc[name] = desc
@@ -34,15 +33,30 @@ def prepro_entities(entity_file, dump_id_name=None, dump_name_desc=None):
     return id_name, name_desc
 
 
-def prepro_corpus(corpus_file, id_name, name_desc):
+def prepro_corpus(corpus_file, id_name):
     data = []
     with open(corpus_file, 'r', encoding='utf-8') as f:
         for line in tqdm(f, desc='process corpus'):  # loop each document
             all_ids = prog.findall(line)
+            if len(all_ids) > 10:  # filter out doc with more than 10 blanks (paper P3 Table 2)
+                continue
             candidates = [id_name[fb_id] for fb_id in all_ids]
-            descriptions = [name_desc[name] for name in candidates]
-            sents = sent_tokenize(line, language='english')
-            sents = [sent.replace("``", '"').replace("''", '"') for sent in sents if len(sent) >= 10]
+            # descriptions = [name_desc[name] for name in candidates]
+            line = line.replace("``", '"').replace("''", '"')  # used same quote
+
+            # one method, makes sure the doc is truly split into sentences, some drawbacks, like,
+            # high-fat -> high - fat
+            # 'm -> ' m
+            # ca n't -> ca n ' t
+            # 5.88 -> 5 . 88 and it will breaks into two sentences
+            # Generally, everything will be separated
+            # line = ' '.join(wordpunct_tokenize(line))
+            # sents = [sent for sent in sent_tokenize(line) if len(sent) >= 10]
+
+            # alternative method (needs to carefully define a regression expression)
+            line = ' '.join(regexp_tokenize(line, pattern="\w*?-?\w+-\w+|\w*'\w+|[a-zA-z]+\S+?|\S+"))
+            sents = [' '.join(word_tokenize(sent)) for sent in sent_tokenize(line) if len(sent) >= 10]
+
             for i in range(len(sents)):  # process each sentence
                 if not prog.search(sents[i]):  # no freebase ids are contained
                     continue
@@ -60,11 +74,11 @@ def prepro_corpus(corpus_file, id_name, name_desc):
                         scd_sent = scd_sent.replace(sub_id, id_name[sub_id])
                     # store each record into dict
                     record = {
-                        'sentence': fst_sent,
-                        'supplementary': scd_sent,
-                        'candidates': candidates,
-                        'descriptions': descriptions,
-                        'answer': answer
+                        's1': fst_sent,
+                        's2': scd_sent,
+                        'c_ans': candidates,
+                        # 'descriptions': descriptions,  # this part can derive from name_desc dict
+                        'ans': answer
                     }
                     data.append(record)
     return data
@@ -74,11 +88,9 @@ def main():
     entity_file = os.path.join(source_dir, 'entities.txt')
     corpus_file = os.path.join(source_dir, 'corpus.txt')
     id_name, name_desc = prepro_entities(entity_file, dump_id_name='id_name.json', dump_name_desc='name_desc.json')
-    print(len(id_name))
-    data = prepro_corpus(corpus_file, id_name, name_desc)
-    print(len(data))
+    data = prepro_corpus(corpus_file, id_name)
     with open('all_data.json', 'w') as f:
-        json.dump(data, f, indent=4)
+        json.dump(data, f)
 
 
 if __name__ == '__main__':

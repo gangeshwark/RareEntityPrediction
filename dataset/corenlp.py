@@ -11,7 +11,7 @@ class CoreNLP(object):
 
     def __init__(self, properties=None):
         self.properties = properties if properties is not None else {
-            'annotators': 'tokenize,ssplit,pos,lemma',
+            'annotators': 'tokenize,ssplit',  # pos,lemma
             'outputFormat': 'json'}
         self.parser = StanfordCoreNLP('http://localhost:9000')
         self.instance = None
@@ -28,11 +28,11 @@ class CoreNLP(object):
     def sent_tokenize(self):
         return [' '.join(words) for words in self.word_tokenize()]
 
-    def word_lemmatize(self):
+    '''def word_lemmatize(self):
         lemmas_list = []
         for sentence in self.instance['sentences']:
             lemmas_list.append([token['lemma'] for token in sentence['tokens']])
         return lemmas_list
 
     def sent_lemmatize(self):
-        return [' '.join(lemmas) for lemmas in self.word_lemmatize()]
+        return [' '.join(lemmas) for lemmas in self.word_lemmatize()]'''
