@@ -1,1 +1,4 @@
 .idea/
+dataset/all_data.json
+dataset/id_name.json
+dataset/name_desc.json
