@@ -56,7 +56,7 @@ def prepro_entities(entity_file):
     with open(entity_file, 'r', encoding='utf-8') as fe:
         for line in tqdm(fe, desc='process entity file'):
             fb_id, *_, name, desc = line.strip().split('\t')
-            desc = sent_tokenize(desc, language='english')  # NLTK sentence tokenization, get first sentence
+            desc = sent_tokenize(desc, language='english')[0]  # NLTK sentence tokenization, get first sentence
             desc = word_tokenize(desc)
             # cut down sentences according to the threshold
             if len(desc) > max_sent_len_desc:
