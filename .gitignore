@@ -1,8 +1,9 @@
 .idea/
-dataset/all_data.json
-dataset/id_name.json
-dataset/name_desc.json
-dataset/__pycache__/
-dataset/chars.txt
-dataset/vocab.txt
-dataset/glove.840B.300d.filtered.npz
+data/chars.txt
+data/words.txt
+data/entity_names.txt
+data/name_desc.json
+data/train.json
+data/dev.json
+data/test.json
+data/glove.840B.300d.filtered.npz

@@ -6,17 +6,16 @@ from nltk import sent_tokenize, word_tokenize
 from nltk.corpus import stopwords
 from collections import OrderedDict
 import json
-import sys
 
 home = os.path.expanduser('~')
 source_dir = os.path.join(home, 'data', 'rare_entity')
 dataset_dir = os.path.join('..', 'data')
 
 prog = re.compile(r'(9202a8c04000641f8\w+)')
-special_character = re.compile(r'[^a-z_\d ]', re.IGNORECASE)
+special_character = re.compile(r'[^A-Za-z_\d,.\- ]', re.IGNORECASE)
 stops = set(stopwords.words("english"))
 
-id_replace = '__BLANK__'
+id_replace = '__blank__'
 UNK = '_UNK_'
 PAD = '_PAD_'
 
@@ -28,11 +27,13 @@ max_word_len = 40
 max_word_len_desc = 30
 
 
-def clean_text(text):
-    text = word_tokenize(text.lower())
+def clean_text(text, lower=False):
+    if lower:
+        text = text.lower()
+    # text = word_tokenize(text.lower())
     # remove stop words.
-    text = [w for w in text if not w in stops]
-    text = " ".join(text)
+    # text = [w for w in text if not w in stops]
+    # text = " ".join(text)
     # remove Special Characters
     text = special_character.sub('', text)
     # replace multiple spaces with single one.
@@ -49,23 +50,33 @@ def json_dump(data, file_path):
     print('dump data to {} successful...'.format(file_path))
 
 
-def prepro_entities(entity_file):
+def prepro_entities(entity_file, lower=False):
     id_name = {}  # freebase id and entity name
     name_desc = {}  # entity name and one sentence description
     word_count = {}
     with open(entity_file, 'r', encoding='utf-8') as fe:
         for line in tqdm(fe, desc='process entity file'):
-            fb_id, *_, name, desc = line.strip().split('\t')
-            # NLTK sentence tokenization, get first one
-            desc = [sent for sent in sent_tokenize(desc, language='english') if len(sent) >= 2][0]
+            fb_id, *_, name, desc = line.strip().split('\t')  # fb_id, anchor_text, wiki_url, fb_name, and description
+            # clean additional backspace
+            fb_id = fb_id.strip()
+            name = name.strip()
+            desc = desc.strip().replace("``", '"').replace("''", '"')
+            desc = sent_tokenize(desc, language='english')[0]  # NLTK sentence tokenization, get first one
+
+            # clean text
+            desc = clean_text(desc, lower)
+
             desc = word_tokenize(desc)
             # cut down sentences according to the threshold
             if len(desc) > max_sent_len_desc:
                 desc = desc[:max_sent_len_desc]
+
             # record id and name pair
             id_name[fb_id] = name
+
             # record name and description pair
             name_desc[name] = desc
+
             # count word frequency
             for word in desc:
                 if word in word_count:
@@ -75,18 +86,21 @@ def prepro_entities(entity_file):
     return id_name, name_desc, word_count
 
 
-def prepro_corpus(corpus_file, id_name):
+def prepro_corpus(corpus_file, id_name, lower=False):
     data = []
     word_count = {}
     with open(corpus_file, 'r', encoding='utf-8') as fc:
         for line in tqdm(fc, desc='process corpus file'):
-            line = line.replace("``", '"').replace("''", '"')
+            line = line.strip().replace("``", '"').replace("''", '"')
             all_ids = prog.findall(line)
+
             # filter out doc with more than 10 blanks (paper P3 Table 2)
             if len(all_ids) > 10:
                 continue
+
             candidates = [id_name[fb_id] for fb_id in all_ids]
             sentences = sent_tokenize(line)  # split paragraph into sentences
+
             # filtered out sentences too short
             sentences = [sent for sent in sentences if len(sent) >= 2]
 
@@ -95,16 +109,23 @@ def prepro_corpus(corpus_file, id_name):
                     continue
 
                 sent_ids = prog.findall(sentences[i])  # obtain all freebase ids in a sentence
+
                 for fb_id in sent_ids:
                     ans = id_name[fb_id]
                     other_ids = [x for x in sent_ids if x != fb_id]  # get other freebase ids
 
-                    fst_sent = sentences[i].replace(fb_id, id_replace)  # replace target id with __BLANK__
+                    fst_sent = sentences[i].replace(fb_id, id_replace)  # replace target id with __blank__
                     for sub_id in other_ids:
                         fst_sent = fst_sent.replace(sub_id, id_name[sub_id])  # replace other ids with actual name
-                    fst_sent = word_tokenize(fst_sent)  # convert sentence into words list
 
-                    if fst_sent.count(id_replace) > 1:  # if contains more than one __BLANK__ ignore
+                    # clean first sentence
+                    fst_sent = clean_text(fst_sent, lower)
+
+                    # convert sentence into words list
+                    fst_sent = word_tokenize(fst_sent)
+
+                    # if contains more than one __blank__ ignore
+                    if fst_sent.count(id_replace) > 1:
                         continue
 
                     # obtain the second sentence as a supplementary
@@ -112,9 +133,13 @@ def prepro_corpus(corpus_file, id_name):
                     sub_ids = prog.findall(scd_sent)
                     for sub_id in sub_ids:
                         scd_sent = scd_sent.replace(sub_id, id_name[sub_id])
+
+                    # clean second sentence
+                    scd_sent = clean_text(scd_sent, lower)
+
                     scd_sent = word_tokenize(scd_sent)  # convert sentence into words list
 
-                    # split first sentence into two parts according to the position of __BLANK__
+                    # split first sentence into two parts according to the position of __blank__
                     blank_idx = fst_sent.index(id_replace)
                     fst_sent_left = fst_sent[:blank_idx]
                     fst_sent_right = fst_sent[blank_idx + 1:]
@@ -149,7 +174,7 @@ def prepro_corpus(corpus_file, id_name):
     return data, word_count
 
 
-def build_vocab(ent_words, cor_words, threshold=20):
+def build_vocab(ent_words, cor_words, threshold=5):
     for word, count in ent_words.items():
         if word in cor_words:
             cor_words[word] += count
@@ -206,21 +231,20 @@ def load_json(filename):
 
 
 def build_embeddings(vocab, emb_path, save_path, dim):
-    sys.stdout.write('Creating {} dimension embeddings for vocabulary...'.format(dim))
+    print('Create embeddings...')
     scale = np.sqrt(3.0 / dim)
     embeddings = np.random.uniform(-scale, scale, [len(vocab), dim])  # random initialized
     embeddings[0] = np.zeros([1, dim])  # zero vector for PAD, i.e., embeddings[0] = zero vector
     with open(emb_path, 'r') as f:
-        for line in f:
+        for line in tqdm(f, desc='update embeddings'):
             tokens = line.strip().split(' ')
             word = tokens[0]
             emb = [float(x) for x in tokens[1:]]
             if word in vocab:
                 idx = vocab[word]
                 embeddings[idx] = np.asarray(emb)
-    sys.stdout.write(' done. Saving...')
+    print(' done. Saving...')
     np.savez_compressed(save_path, embeddings=embeddings)
-    sys.stdout.write(' done.\n')
 
 
 def convert_to_index(data, vocab, entity_names, save_path, name):
@@ -237,7 +261,7 @@ def convert_to_index(data, vocab, entity_names, save_path, name):
 
 
 def main():
-    """File Path"""
+    """File path"""
     # source path
     entities_path = os.path.join(source_dir, 'entities.txt')
     corpus_path = os.path.join(source_dir, 'corpus.txt')
@@ -261,15 +285,14 @@ def main():
     del id_name  # delete unused items to release space
 
     """Build and save words and chars vocabulary"""
-    sys.stdout.write('Creating words and chars vocabularies...')
-    vocab, char_vocab = build_vocab(ent_vocab, cor_vocab)
+    print('Creating words and chars vocabularies...')
+    vocab, char_vocab = build_vocab(ent_vocab, cor_vocab, threshold=5)
     del ent_vocab, cor_vocab
     vocab = [PAD, UNK] + list(vocab)
     save_vocab(vocab, word_vocab_path)
     char_vocab = [PAD] + list(char_vocab)
     save_vocab(char_vocab, char_vocab_path)
     del vocab, char_vocab
-    sys.stdout.write(' done...\n')
 
     """Convert all dataset by index"""
     vocab, _ = load_vocab(os.path.join(dataset_dir, 'words.txt'))
