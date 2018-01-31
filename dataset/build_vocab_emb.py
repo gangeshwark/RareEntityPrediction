@@ -32,47 +32,54 @@ def is_digit(s):
 def build_corpus_vocab(corpus_path, use_supplementary=False):
     vocab = set()
     chars_vocab = set()
-    with open(corpus_path, 'r', encoding='utf-8') as f:
-        dataset = json.load(f)
-        for record in tqdm(dataset, desc='build corpus vocabulary'):
-            sent1 = record['s1']
-            sent2 = record['s2'] if use_supplementary else None
-            words1 = word_tokenize(sent1.strip())
+    dataset = load_vocab(corpus_path)
+    for record in tqdm(dataset, desc='build corpus vocabulary'):
+        sent1 = record['s1']
+        sent2 = record['s2'] if use_supplementary else None
+        words1 = word_tokenize(sent1.strip())
+
+        # update char vocab
+        for word in words1:
+            chars_vocab.update(word)
+
+        words1 = [NUM if is_digit(word) else word for word in words1]
+        vocab.update(words1)
+        for word in words1:
+            chars_vocab.update(word)
+        if sent2 is not None:
+            words2 = word_tokenize(sent2.strip())
 
             # update char vocab
-            for word in words1:
+            for word in words2:
                 chars_vocab.update(word)
 
-            words1 = [NUM if is_digit(word) else word for word in words1]
-            vocab.update(words1)
-            for word in words1:
-                chars_vocab.update(word)
-            if sent2 is not None:
-                words2 = word_tokenize(sent2.strip())
-
-                # update char vocab
-                for word in words2:
-                    chars_vocab.update(word)
-
-                words2 = [NUM if is_digit(word) else word for word in words2]
-                vocab.update(words2)
+            words2 = [NUM if is_digit(word) else word for word in words2]
+            vocab.update(words2)
     return vocab, chars_vocab
+
+
+def load_json(filename):
+    try:
+        with open(filename, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+            return data
+    except IOError:
+        raise "ERROR: Unable to locate file {}".format(filename)
 
 
 def build_description_vocab(desc_path):
     vocab = set()
     chars_vocab = set()
-    with open(desc_path, 'r', encoding='utf-8') as f:
-        dataset = json.load(f)
-        for key, value in tqdm(dataset.items(), desc='build description vocabulary'):
-            words = word_tokenize(value.strip())
+    dataset = load_json(desc_path)
+    for key, value in tqdm(dataset.items(), desc='build description vocabulary'):
+        words = word_tokenize(value.strip())
 
-            # update char vocab
-            for word in words:
-                chars_vocab.update(word)
+        # update char vocab
+        for word in words:
+            chars_vocab.update(word)
 
-            words = [NUM if is_digit(word) else word for word in words]
-            vocab.update(words)
+        words = [NUM if is_digit(word) else word for word in words]
+        vocab.update(words)
     return vocab, chars_vocab
 
 
@@ -144,6 +151,7 @@ def main():
 
     # merge two chars vocabs and save
     chars_vocab = desc_chars_vocab | corpus_chars_vocab
+    chars_vocab = [PAD] + list(chars_vocab)
     save_vocab(chars_vocab, os.path.join(dataset_dir, 'chars.txt'))
 
     # merge two vocabs
