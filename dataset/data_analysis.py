@@ -3,9 +3,12 @@ from tqdm import tqdm
 from nltk import word_tokenize, sent_tokenize
 from collections import OrderedDict
 import os
+import re
 
 home = os.path.expanduser('~')
 source_dir = os.path.join(home, 'data', 'rare_entity')
+
+prog = re.compile(r'(9202a8c04000641f8\w+)')
 
 
 def count_length():
@@ -93,6 +96,20 @@ def count_length():
         total_sum += value
     print("len <= 35: {}, len <= 30: {}, total sents: {}, ratio 35: {:04.2f}, ratio 30: {:04.2f}"
           .format(sum1, sum2, total_sum, float(sum1) / float(total_sum) * 100, float(sum2) / float(total_sum) * 100))
+
+
+def count_candidates_num():
+    cand_dict = {}
+    with open(os.path.join(source_dir, 'corpus.txt'), 'r', encoding='utf-8') as f:
+        for line in tqdm(f, desc='process corpus'):
+            all_ids = prog.findall(line)
+            nums = len(all_ids)
+            if nums in cand_dict:
+                cand_dict[nums] += 1
+            else:
+                cand_dict[nums] = 1
+    cand_dict = OrderedDict(sorted(cand_dict.items(), key=lambda val: val[0], reverse=False))
+    print(cand_dict)
 
 
 def main():

@@ -7,6 +7,8 @@ from nltk.corpus import stopwords
 from collections import OrderedDict
 import json
 
+np.random.seed(12345)
+
 home = os.path.expanduser('~')
 source_dir = os.path.join(home, 'data', 'rare_entity')
 dataset_dir = os.path.join('..', 'data')
@@ -86,17 +88,19 @@ def prepro_entities(entity_file, lower=False):
     return id_name, name_desc, word_count
 
 
-def prepro_corpus(corpus_file, id_name, lower=False):
+def prepro_corpus(corpus_file, id_name, lower=False, num_cands=3):
     data = []
     word_count = {}
+    names = list(id_name.values())
+    num_names = len(names)
     with open(corpus_file, 'r', encoding='utf-8') as fc:
         for line in tqdm(fc, desc='process corpus file'):
             line = line.strip().replace("``", '"').replace("''", '"')
             all_ids = prog.findall(line)
 
             # filter out doc with more than 10 blanks (paper P3 Table 2)
-            if len(all_ids) > 10:
-                continue
+            # if len(all_ids) > 10:
+            #     continue
 
             candidates = [id_name[fb_id] for fb_id in all_ids]
             sentences = sent_tokenize(line)  # split paragraph into sentences
@@ -128,6 +132,24 @@ def prepro_corpus(corpus_file, id_name, lower=False):
                     if fst_sent.count(id_replace) > 1:
                         continue
 
+                    # create candidates set -- TODO add at 01/02/2018
+                    cands = []
+                    if len(candidates) < num_cands:  # pick candidates from all data
+                        cands += candidates
+                        for _ in range(num_cands - len(candidates)):
+                            rand = np.random.randint(num_names, size=1)[0]
+                            while names[rand] in cands:
+                                rand = np.random.randint(num_names, size=1)[0]
+                            cands += [names[rand]]
+                    else:  # pick several from current candidates
+                        cands += [ans]
+                        ans_idx = candidates.index(ans)
+                        tmp = candidates[:ans_idx] + candidates[ans_idx + 1:]
+                        np.random.shuffle(tmp)
+                        cands += tmp[:num_cands - 1]
+                    # shuffle candidates
+                    np.random.shuffle(cands)
+
                     # obtain the second sentence as a supplementary
                     scd_sent = sentences[i + 1] if i < len(sentences) - 1 else sentences[i - 1]
                     sub_ids = prog.findall(scd_sent)
@@ -137,10 +159,11 @@ def prepro_corpus(corpus_file, id_name, lower=False):
                     # clean second sentence
                     scd_sent = clean_text(scd_sent, lower)
 
-                    scd_sent = word_tokenize(scd_sent)  # convert sentence into words list
+                    # convert sentence into words list
+                    scd_sent = word_tokenize(scd_sent)
 
+                    blank_idx = fst_sent.index(id_replace)  # __blank__ index
                     # split first sentence into two parts according to the position of __blank__
-                    blank_idx = fst_sent.index(id_replace)
                     fst_sent_left = fst_sent[:blank_idx]
                     fst_sent_right = fst_sent[blank_idx + 1:]
 
@@ -155,8 +178,12 @@ def prepro_corpus(corpus_file, id_name, lower=False):
                     if len(scd_sent) > max_sent_len:
                         scd_sent = scd_sent[:max_sent_len]
 
+                    # merge first sentences -- TODO add at 01/02/2018
+                    blank_idx = len(fst_sent_right)  # since left pad
+                    fst_sent = fst_sent_left + fst_sent_right
+
                     # count the words frequency
-                    words = fst_sent_left + fst_sent_right + scd_sent
+                    words = fst_sent + scd_sent
                     for word in words:
                         if word in word_count:
                             word_count[word] += 1
@@ -164,13 +191,18 @@ def prepro_corpus(corpus_file, id_name, lower=False):
                             word_count[word] = 1
 
                     # store each record into dict
-                    record = {"s1l": fst_sent_left,
+                    '''record = {"s1l": fst_sent_left,
                               "s1r": fst_sent_right,
                               "s2": scd_sent,
-                              "c_ans": candidates,
-                              "ans": ans}
+                              "c_ans": cands,  # fix length with num_cands
+                              "ans": ans}'''
+                    record = {'s1': fst_sent,
+                              's2': scd_sent,
+                              'idx': blank_idx,
+                              'c_ans': cands,
+                              'ans': ans}
                     data.append(record)
-
+    np.random.shuffle(data)
     return data, word_count
 
 
@@ -250,9 +282,14 @@ def build_embeddings(vocab, emb_path, save_path, dim):
 def convert_to_index(data, vocab, entity_names, save_path, name):
     dataset = []
     for record in tqdm(data, desc='convert {} dataset to index'.format(name)):
-        record_idx = {"s1l": [vocab[word] if word in vocab else vocab[UNK] for word in record['s1l']],
+        '''record_idx = {"s1l": [vocab[word] if word in vocab else vocab[UNK] for word in record['s1l']],
                       "s1r": [vocab[word] if word in vocab else vocab[UNK] for word in record['s1r']],
                       "s2": [vocab[word] if word in vocab else vocab[UNK] for word in record['s2']],
+                      "c_ans": [entity_names[name] for name in record['c_ans']],
+                      "ans": entity_names[record['ans']]}'''
+        record_idx = {"s1": [vocab[word] if word in vocab else vocab[UNK] for word in record['s1']],
+                      "s2": [vocab[word] if word in vocab else vocab[UNK] for word in record['s2']],
+                      "idx": record['idx'],
                       "c_ans": [entity_names[name] for name in record['c_ans']],
                       "ans": entity_names[record['ans']]}
         dataset.append(record_idx)
