@@ -17,23 +17,35 @@ def batch_iter(dataset, batch_size):
         desc = [name_desc[can] for can in record['c_ans']]
         batch_desc += [desc]
         batch_cand += [record['c_ans']]
-        batch_y += [record['ans']]
+        y = []
+        for x in record['c_ans']:
+            if x == record['ans']:
+                y.append(1)
+            else:
+                y.append(0)
+        batch_y += [y]
     if len(batch_s1) != 0:
         yield batch_s1, batch_s2, batch_idx, batch_desc, batch_cand, batch_y
-    '''batch_s1l, batch_s1r, batch_s2, batch_cand_sent, batch_cand, batch_y = [], [], [], [], [], []
+    '''batch_s1l, batch_s1r, batch_s2, batch_desc, batch_cand, batch_y = [], [], [], [], [], []
     for record in dataset:
         if len(batch_s1l) == batch_size:
-            yield batch_s1l, batch_s1r, batch_s2, batch_cand_sent, batch_cand, batch_y
-            batch_s1l, batch_s1r, batch_s2, batch_cand_sent, batch_cand, batch_y = [], [], [], [], [], []
+            yield batch_s1l, batch_s1r, batch_s2, batch_desc, batch_cand, batch_y
+            batch_s1l, batch_s1r, batch_s2, batch_desc, batch_cand, batch_y = [], [], [], [], [], []
         batch_s1l += [record['s1l']]  # batch_size * num_of_words
         batch_s1r += [record['s1r']]  # batch_size * num_of_words
         batch_s2 += [record['s2']]    # batch_size * num_of_words
         desc = [name_desc[can] for can in record['c_ans']]  # num_of_candidates * num_of_words
-        batch_cand_sent += [desc]          # batch_size * num_of_candidates * num_of_words
+        batch_desc += [desc]          # batch_size * num_of_candidates * num_of_words
         batch_cand += [record['c_ans']]  # batch_size * num_of_candidates
-        batch_y += [record['ans']]    # batch_size * 1
+        y = []
+        for x in record['c_ans']:
+            if x == record['ans']:
+                y.append(1)
+            else:
+                y.append(0)
+        batch_y += [y]    # batch_size * num_cand
     if len(batch_s1l) != 0:
-        yield batch_s1l, batch_s1r, batch_s2, batch_cand_sent, batch_cand, batch_y'''
+        yield batch_s1l, batch_s1r, batch_s2, batch_desc, batch_cand, batch_y'''
 
 
 def load_embeddings(filename):

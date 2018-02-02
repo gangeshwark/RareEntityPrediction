@@ -179,11 +179,11 @@ def prepro_corpus(corpus_file, id_name, lower=False, num_cands=3):
                         scd_sent = scd_sent[:max_sent_len]
 
                     # merge first sentences -- TODO add at 01/02/2018
-                    blank_idx = len(fst_sent_right)  # since left pad
-                    fst_sent = fst_sent_left + fst_sent_right
+                    # blank_idx = len(fst_sent_right)  # since left pad
+                    # fst_sent = fst_sent_left + fst_sent_right
 
                     # count the words frequency
-                    words = fst_sent + scd_sent
+                    words = fst_sent_left + fst_sent_right + scd_sent
                     for word in words:
                         if word in word_count:
                             word_count[word] += 1
@@ -196,9 +196,10 @@ def prepro_corpus(corpus_file, id_name, lower=False, num_cands=3):
                               "s2": scd_sent,
                               "c_ans": cands,  # fix length with num_cands
                               "ans": ans}'''
-                    record = {'s1': fst_sent,
+                    record = {'s1l': fst_sent_left,
+                              's1r': fst_sent_right,
                               's2': scd_sent,
-                              'idx': blank_idx,
+                              # 'idx': blank_idx,
                               'c_ans': cands,
                               'ans': ans}
                     data.append(record)
@@ -282,16 +283,16 @@ def build_embeddings(vocab, emb_path, save_path, dim):
 def convert_to_index(data, vocab, entity_names, save_path, name):
     dataset = []
     for record in tqdm(data, desc='convert {} dataset to index'.format(name)):
-        '''record_idx = {"s1l": [vocab[word] if word in vocab else vocab[UNK] for word in record['s1l']],
+        record_idx = {"s1l": [vocab[word] if word in vocab else vocab[UNK] for word in record['s1l']],
                       "s1r": [vocab[word] if word in vocab else vocab[UNK] for word in record['s1r']],
                       "s2": [vocab[word] if word in vocab else vocab[UNK] for word in record['s2']],
                       "c_ans": [entity_names[name] for name in record['c_ans']],
-                      "ans": entity_names[record['ans']]}'''
-        record_idx = {"s1": [vocab[word] if word in vocab else vocab[UNK] for word in record['s1']],
+                      "ans": entity_names[record['ans']]}
+        '''record_idx = {"s1": [vocab[word] if word in vocab else vocab[UNK] for word in record['s1']],
                       "s2": [vocab[word] if word in vocab else vocab[UNK] for word in record['s2']],
                       "idx": record['idx'],
                       "c_ans": [entity_names[name] for name in record['c_ans']],
-                      "ans": entity_names[record['ans']]}
+                      "ans": entity_names[record['ans']]}'''
         dataset.append(record_idx)
     json_dump(dataset, save_path)
     del dataset
