@@ -7,12 +7,16 @@ from data.data_prepro import max_sent_len, max_sent_len_desc
 
 class DoubEnc(object):
     def __init__(self, config):
+        self.num_units = 300
+        self.lr = 0.001
+        self.grad_clip = 5.0
         self.config = config
         self._add_placeholders()
         self._add_embedding_op()
         self._build_model_op()
         self._build_loss_op()
-        self._build_pred_op()
+        # self._build_pred_op()
+        self.acc()
         self._build_train_op()
         self.sess = None
         self.saver = None
@@ -69,12 +73,12 @@ class DoubEnc(object):
 
     def _build_model_op(self):
         with tf.variable_scope('lexical_encoder'):
-            lexical_cell = LSTMCell(num_units=self.config.num_units, state_is_tuple=True, use_peepholes=True)
+            lexical_cell = LSTMCell(num_units=self.num_units, state_is_tuple=True, use_peepholes=True)
             s = tf.shape(self.desc_emb)
             desc_emb = tf.reshape(self.desc_emb, shape=[s[0] * s[1], s[2], s[-1]])
             desc_seq_len = tf.reshape(self.desc_seq_len, shape=[s[0] * s[1]])
             _, de = dynamic_rnn(lexical_cell, desc_emb, sequence_length=desc_seq_len, dtype=tf.float32, scope='lex_rnn')
-            self.de = tf.reshape(de, shape=[s[0], s[1], self.config.num_units])  # (batch_size, num_cands, num_units)
+            self.de = tf.reshape(de, shape=[s[0], s[1], self.num_units])  # (batch_size, num_cands, num_units)
 
         '''with tf.variable_scope('concatenate_sentence'):
             de = tf.expand_dims(self.de, axis=2)  # (batch_size, num_cands, 1, num_units)
@@ -105,18 +109,18 @@ class DoubEnc(object):
             s1_emb = tf.concat(merged_s1_list, axis=1)  # (batch, num_cands, max_sent_len, dim)
 
         with tf.variable_scope('context_encoder'):
-            context_cell = LSTMCell(num_units=self.config.num_units, state_is_tuple=True, use_peepholes=True)
+            context_cell = LSTMCell(num_units=self.num_units, state_is_tuple=True, use_peepholes=True)
             s = tf.shape(s1_emb)
             s1_emb = tf.reshape(s1_emb, shape=[s[0] * s[1], s[2], s[-1]])
             s1_seq_len = tf.concat([self.s1_seq_len for _ in range(s[1])], axis=0)
             _, hi = dynamic_rnn(context_cell, s1_emb, sequence_length=s1_seq_len, dtype=tf.float32, scope='con_rnn')
-            self.hi = tf.reshape(hi, shape=[s[0], s[1], self.config.num_units])
+            self.hi = tf.reshape(hi, shape=[s[0], s[1], self.num_units])
 
         with tf.variable_scope('project'):
             batch_size, num_cands, _ = tf.shape(self.de)
-            w = tf.get_variable(name='W', shape=[self.config.num_units, self.config.num_units], dtype=tf.float32)
-            de = tf.transpose(tf.reshape(self.de, shape=[-1, self.config.num_units]))  # (num_units, batch_size * cands)
-            hi = tf.reshape(self.hi, shape=[-1, self.config.num_units])  # (batch_size * cands, num_units)
+            w = tf.get_variable(name='W', shape=[self.num_units, self.num_units], dtype=tf.float32)
+            de = tf.transpose(tf.reshape(self.de, shape=[-1, self.num_units]))  # (num_units, batch_size * cands)
+            hi = tf.reshape(self.hi, shape=[-1, self.num_units])  # (batch_size * cands, num_units)
             output = tf.matmul(tf.matmul(hi, w), de)  # ignore bias
             self.logits = tf.reshape(tf.reduce_sum(output, axis=1), shape=[batch_size, num_cands])
 
@@ -124,8 +128,8 @@ class DoubEnc(object):
         losses = tf.nn.sigmoid_cross_entropy_with_logits(logits=self.logits, labels=tf.cast(self.y, tf.float32))
         self.loss = tf.reduce_mean(losses)
 
-    def _build_pred_op(self):
-        self.preds = tf.cast(tf.argmax(self.logits, axis=-1), tf.int32)
+    '''def _build_pred_op(self):
+        self.preds = tf.cast(tf.argmax(self.logits, axis=-1), tf.int32)'''
 
     def _build_train_op(self):
         optimizer = tf.train.AdamOptimizer(learning_rate=self.config.lr)
