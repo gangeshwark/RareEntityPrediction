@@ -3,20 +3,30 @@ from tensorflow.python.ops.rnn import dynamic_rnn
 from tensorflow.python.ops.rnn_cell import LSTMCell
 from model.utils import load_embeddings, pad_sequence, batch_iter
 from data.data_prepro import max_sent_len, max_sent_len_desc
+from model.logger import get_logger, Progbar
+import os
 
 
 class DoubEnc(object):
-    def __init__(self, config):
-        self.num_units = 300
-        self.lr = 0.001
-        self.grad_clip = 5.0
-        self.config = config
+    def __init__(self, num_units, lr, grad_clip, finetune_emb, ckpt_path, embedding_path, model_name):
+        # general parameters
+        self.num_units = num_units
+        self.lr = lr
+        self.grad_clip = grad_clip
+        self.finetune_emb = finetune_emb
+        self.logger = get_logger(os.path.join(ckpt_path, 'log.txt'))
+        self.ckpt_path = ckpt_path
+        if not os.path.exists(self.ckpt_path):
+            os.makedirs(self.ckpt_path)
+        self.model_name = model_name
+        self.embedding_path = embedding_path
+
+        # add module
         self._add_placeholders()
         self._add_embedding_op()
         self._build_model_op()
         self._build_loss_op()
-        # self._build_pred_op()
-        self.acc()
+        self._compute_accuracy()
         self._build_train_op()
         self.sess = None
         self.saver = None
@@ -27,15 +37,29 @@ class DoubEnc(object):
         self.saver = tf.train.Saver(max_to_keep=5)
         self.sess.run(tf.global_variables_initializer())
 
+    def save_session(self, epoch):
+        self.saver.save(self.sess, self.ckpt_path + self.model_name, global_step=epoch)
+
+    def restore_last_session(self, ckpt_path=None):
+        if ckpt_path is not None:
+            ckpt = tf.train.get_checkpoint_state(ckpt_path)
+        else:
+            ckpt = tf.train.get_checkpoint_state(self.ckpt_path)  # get checkpoint state
+        if ckpt and ckpt.model_checkpoint_path:  # restore session
+            self.saver.restore(self.sess, ckpt.model_checkpoint_path)
+
+    def close_session(self):
+        self.sess.close()
+
     def _add_placeholders(self):
         # shape = (batch_size, max length of sentence in batch)
         self.s1 = tf.placeholder(tf.int32, shape=[None, None], name='sent1')
         # shape = (batch_size)
         self.s1_seq_len = tf.placeholder(tf.int32, shape=[None], name='sent1_seq_length')
         # shape = (batch_size, max length of sentence in batch)
-        # self.s2 = tf.placeholder(tf.int32, shape=[None, None], name='sent2')  # DoubEnc doesn't need this one
+        '''self.s2 = tf.placeholder(tf.int32, shape=[None, None], name='sent2')  # DoubEnc doesn't need this one'''
         # shape = (batch_size)
-        # self.s2_seq_len = tf.placeholder(tf.int32, shape=[None], name='sent2_seq_length')
+        '''self.s2_seq_len = tf.placeholder(tf.int32, shape=[None], name='sent2_seq_length')'''
         # shape = (batch_size, num_cands, max length of sentence in batch)
         self.desc = tf.placeholder(tf.int32, shape=[None, None, None], name='descriptions')
         # shape = (batch_size, num_cands)
@@ -47,24 +71,28 @@ class DoubEnc(object):
         # shape = (batch_size, num_candidates)
         self.y = tf.placeholder(tf.int32, shape=[None, None], name='answer')
 
-    def _get_feed_dict(self, s1, s2, desc, idx, cand, y=None):
+    def _get_feed_dict(self, s1, desc, idx, cand, s2=None, y=None):
         s1, s1_seq_len = pad_sequence(s1, max_length=max_sent_len - 1, pad_tok=0, pad_left=True, nlevels=1)
         s1_seq_len = [x + 1 for x in s1_seq_len]
-        s2, s2_seq_len = pad_sequence(s2, max_length=max_sent_len, pad_tok=0, pad_left=True, nlevels=1)
+        # if s2 is not None:
+        #    s2, s2_seq_len = pad_sequence(s2, max_length=max_sent_len, pad_tok=0, pad_left=True, nlevels=1)
         desc, desc_seq_len = pad_sequence(desc, max_length=max_sent_len_desc, pad_tok=0, pad_left=True, nlevels=2)
         feed_dict = {
             self.s1: s1, self.s1_seq_len: s1_seq_len,
             self.desc: desc, self.desc_seq_len: desc_seq_len,
             self.idx: idx,
             self.cand: cand}
+        '''if s2 is not None:
+            feed_dict[self.s2] = s2
+            feed_dict[self.s2_seq_len] = s2_seq_len'''
         if y is not None:
             feed_dict[self.y] = y
         return feed_dict
 
     def _add_embedding_op(self):
         with tf.variable_scope('embeddings'):
-            _word_embedding = tf.Variable(load_embeddings(self.config.embedding_path), name='_word_embeddings',
-                                          dtype=tf.float32, trainable=self.config.finetune_emb)
+            _word_embedding = tf.Variable(load_embeddings(self.embedding_path), name='_word_embeddings',
+                                          dtype=tf.float32, trainable=self.finetune_emb)
             # self.s1l_emb = tf.nn.embedding_lookup(_word_embedding, self.s1l, name='sent1_left_emb')
             # self.s1r_emb = tf.nn.embedding_lookup(_word_embedding, self.s1r, name='sent1_right_emb')
             self.s1_emb = tf.nn.embedding_lookup(_word_embedding, self.s1, name='sent1_emb')
@@ -100,7 +128,7 @@ class DoubEnc(object):
                     lsz = max_sent_len - 1 - idx_list[i]  # left sent size
                     rsz = idx_list[i]  # right sent size
                     s1_emb_left, s1_emb_right = tf.split(s1_emb_list[i], num_or_size_splits=[lsz, rsz], axis=0)
-                    de_tmp = tf.expand_dims(de_res_list[i], axis=0) # (1, num_units)
+                    de_tmp = tf.expand_dims(de_res_list[i], axis=0)  # (1, num_units)
                     s1 = tf.concat([s1_emb_left, de_tmp, s1_emb_right], axis=0)  # (max_sent_len, dim)
                     tmp_merged.append(s1)
                 merged = tf.stack(tmp_merged)  # (batch_size, max_sent_len, dim)
@@ -128,36 +156,35 @@ class DoubEnc(object):
         losses = tf.nn.sigmoid_cross_entropy_with_logits(logits=self.logits, labels=tf.cast(self.y, tf.float32))
         self.loss = tf.reduce_mean(losses)
 
-    '''def _build_pred_op(self):
-        self.preds = tf.cast(tf.argmax(self.logits, axis=-1), tf.int32)'''
-
     def _build_train_op(self):
-        optimizer = tf.train.AdamOptimizer(learning_rate=self.config.lr)
-        if self.config.grad_clip is not None:
+        optimizer = tf.train.AdamOptimizer(learning_rate=self.lr)
+        if self.grad_clip is not None:
             grads, vs = zip(*optimizer.compute_gradients(self.loss))
-            grands, _ = tf.clip_by_global_norm(grads, self.config.grad_clip)
+            grands, _ = tf.clip_by_global_norm(grads, self.grad_clip)
             self.train_op = optimizer.apply_gradients(zip(grads, vs))
 
-    def acc(self):
+    def _compute_accuracy(self):
         correct_preds = tf.equal(tf.argmax(self.logits, axis=-1), tf.argmax(self.y, axis=-1))
         self.accuracy = tf.reduce_mean(tf.cast(correct_preds, dtype=tf.float32))
 
     def train(self, dataset, devset, batch_size, epochs):
+        self.logger.info('Start training...')
+        nbatches = (len(dataset) + batch_size - 1) // batch_size
         for epoch in range(1, epochs + 1):
-            for i, (s1, s2, idx, desc, cand, y) in enumerate(batch_iter(dataset, batch_size)):
-                feed_dict = self._get_feed_dict(s1, s2, desc, idx, cand, y)
+            self.logger.info('Epoch %2d/%2d:' % (epoch, epochs))
+            prog = Progbar(target=nbatches)  # nbatches
+            for i, (s1, _, idx, desc, cand, y) in enumerate(batch_iter(dataset, batch_size)):
+                feed_dict = self._get_feed_dict(s1, desc, idx, cand, s2=None, y=y)
                 _, train_loss = self.sess.run([self.train_op, self.loss], feed_dict=feed_dict)
+                prog.update(i + 1, [("train loss", train_loss)])
             # build evaluate
             self.evaluate(devset, batch_size)
-        # TODO
 
     def evaluate(self, dataset, batch_size):
-        # TODO
         nbatches = (len(dataset) + batch_size - 1) // batch_size
         acc = []
         for s1, s2, idx, desc, cand, y in batch_iter(dataset, batch_size):
-            feed_dict = self._get_feed_dict(s1, s2, desc, idx, cand, y)
+            feed_dict = self._get_feed_dict(s1, desc, idx, cand, s2=None, y=y)
             batch_acc = self.sess.run(self.accuracy, feed_dict=feed_dict)
             acc.append(batch_acc)
-        print('Accuracy: {:04.2f}'.format(sum(acc) / nbatches * 100))
-
+        self.logger.info('Accuracy: {:04.2f}'.format(sum(acc) / nbatches * 100))
