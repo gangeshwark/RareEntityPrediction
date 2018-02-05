@@ -158,7 +158,7 @@ class DoubEnc(object):
             s = tf.shape(s1_emb)
             print("s_int", s_int)
 
-            s1_emb = tf.reshape(s1_emb, shape=[s_int[0] * s_int[1], self.s1_max_len, s_int[3]])
+            s1_emb = tf.reshape(s1_emb, shape=[s_int[0] * s_int[1], max_sent_len, s_int[3]])
             print("s1_emb", s1_emb.get_shape())
             s1_seq_len = tf.concat([self.s1_seq_len for _ in range(s_int[1])], axis=0)
             _, hi = dynamic_rnn(context_cell, s1_emb, sequence_length=s1_seq_len, dtype=tf.float32, scope='con_rnn')

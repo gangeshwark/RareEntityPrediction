@@ -32,10 +32,6 @@ max_word_len_desc = 30
 def clean_text(text, lower=False):
     if lower:
         text = text.lower()
-    # text = word_tokenize(text.lower())
-    # remove stop words.
-    # text = [w for w in text if not w in stops]
-    # text = " ".join(text)
     # remove Special Characters
     text = special_character.sub('', text)
     # replace multiple spaces with single one.
@@ -64,21 +60,15 @@ def prepro_entities(entity_file, lower=False):
             name = name.strip()
             desc = desc.strip().replace("``", '"').replace("''", '"')
             desc = sent_tokenize(desc, language='english')[0]  # NLTK sentence tokenization, get first one
-
-            # clean text
-            desc = clean_text(desc, lower)
-
-            desc = word_tokenize(desc)
+            # clean and tokenize text
+            desc = word_tokenize(clean_text(desc, lower))
             # cut down sentences according to the threshold
             if len(desc) > max_sent_len_desc:
                 desc = desc[:max_sent_len_desc]
-
             # record id and name pair
             id_name[fb_id] = name
-
             # record name and description pair
             name_desc[name] = desc
-
             # count word frequency
             for word in desc:
                 if word in word_count:
@@ -97,18 +87,11 @@ def prepro_corpus(corpus_file, id_name, lower=False, num_cands=3):
         for i, line in tqdm(enumerate(fc), desc='process corpus file'):
             line = line.strip().replace("``", '"').replace("''", '"')
             all_ids = prog.findall(line)
-
-            # filter out doc with more than 10 blanks (paper P3 Table 2)
-            # if len(all_ids) > 10:
-            #     continue
-
             candidates = [id_name[fb_id] for fb_id in all_ids]
             candidates = list(set(candidates))
             sentences = sent_tokenize(line)  # split paragraph into sentences
-
             # filtered out sentences too short
-            sentences = [sent for sent in sentences if len(sent) >= 2]
-
+            sentences = [sent for sent in sentences if len(sent) >= 10]
             for i in range(len(sentences)):
                 if not prog.search(sentences[i]):  # if no freebase ids are contained, ignore this sentence
                     continue
@@ -146,11 +129,6 @@ def prepro_corpus(corpus_file, id_name, lower=False, num_cands=3):
                         cands += [ans]
                         tmp = [x for x in candidates if x != ans]
                         cands.extend(tmp[:2])
-
-                        # ans_idx = candidates.index(ans)
-                        # tmp = candidates[:ans_idx] + candidates[ans_idx + 1:]
-                        # np.random.shuffle(tmp)
-                        # cands += tmp[:num_cands - 1]
                     # shuffle candidates
                     assert len(cands) == num_cands
                     np.random.shuffle(cands)
@@ -160,12 +138,8 @@ def prepro_corpus(corpus_file, id_name, lower=False, num_cands=3):
                     sub_ids = prog.findall(scd_sent)
                     for sub_id in sub_ids:
                         scd_sent = scd_sent.replace(sub_id, id_name[sub_id])
-
-                    # clean second sentence
-                    scd_sent = clean_text(scd_sent, lower)
-
-                    # convert sentence into words list
-                    scd_sent = word_tokenize(scd_sent)
+                    # clean and tokenize second sentences
+                    scd_sent = word_tokenize(clean_text(scd_sent, lower))
 
                     blank_idx = fst_sent.index(id_replace)  # __blank__ index
                     # split first sentence into two parts according to the position of __blank__
