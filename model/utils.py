@@ -1,20 +1,20 @@
 import numpy as np
 from data.data_prepro import load_json, load_vocab, max_sent_len, max_sent_len_desc
 
-
-name_desc = load_json('../data/name_desc.json')
+name_desc = load_json('data/name_desc.json')
 
 
 def batch_iter(dataset, batch_size):
     batch_s1, batch_s2, batch_idx, batch_desc, batch_cand, batch_y = [], [], [], [], [], []
     for record in dataset:
         if len(batch_s1) == batch_size:
-            yield batch_s1, batch_s2, batch_idx, batch_desc, batch_cand, batch_y
+            return batch_s1, batch_s2, batch_idx, batch_desc, batch_cand, batch_y
             batch_s1, batch_s2, batch_idx, batch_desc, batch_cand, batch_y = [], [], [], [], [], []
         batch_s1 += [record['s1']]
         batch_s2 += [record['s2']]
         batch_idx += [record['idx']]
-        desc = [name_desc[can] for can in record['c_ans']]
+        desc = [name_desc[str(can)] for can in record['c_ans']]
+        # print("DESC:", desc)
         batch_desc += [desc]
         batch_cand += [record['c_ans']]
         y = []
@@ -25,7 +25,7 @@ def batch_iter(dataset, batch_size):
                 y.append(0)
         batch_y += [y]
     if len(batch_s1) != 0:
-        yield batch_s1, batch_s2, batch_idx, batch_desc, batch_cand, batch_y
+        return batch_s1, batch_s2, batch_idx, batch_desc, batch_cand, batch_y
     '''batch_s1l, batch_s1r, batch_s2, batch_desc, batch_cand, batch_y = [], [], [], [], [], []
     for record in dataset:
         if len(batch_s1l) == batch_size:

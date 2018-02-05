@@ -12,6 +12,7 @@ prog = re.compile(r'(9202a8c04000641f8\w+)')
 special_character = re.compile(r'[^a-z_\d ]', re.IGNORECASE)
 
 stops = set(stopwords.words("english"))
+stops = {k: 1 for k in stops}
 
 id_replace = '_BLANK_'
 
@@ -19,8 +20,15 @@ id_replace = '_BLANK_'
 def clean_text(text):
     text = word_tokenize(text.lower())
     # remove stop words.
-    text = [w for w in text if not w in stops]
-    text = " ".join(text)
+    # text = [w for w in text if not w in stops]
+    text1 = []
+    for w in text:
+        try:
+            if stops[w]:
+                pass
+        except:
+            text1.append(w)
+    text = " ".join(text1)
     # remove Special Characters
     text = special_character.sub('', text)
     # replace multiple spaces with single one.
@@ -116,7 +124,7 @@ def main():
     corpus_file = os.path.join(source_dir, 'corpus.txt')
     id_name, name_desc = prepro_entities(entity_file, dump_id_name='id_name.json', dump_name_desc='name_desc.json')
     data = prepro_corpus(corpus_file, id_name)
-    with open('all_data.json', 'w') as f:
+    with open('all_data_new1.json', 'w') as f:
         json.dump(data, f)
 
 

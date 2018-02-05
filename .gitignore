@@ -7,3 +7,11 @@ data/train.json
 data/dev.json
 data/test.json
 data/glove.840B.300d.filtered.npz
+
+dataset/all_data_unclean.json
+dataset/id_name.json
+dataset/name_desc.json
+dataset/__pycache__/
+dataset/chars.txt
+dataset/vocab.txt
+dataset/glove.840B.300d.filtered.npz

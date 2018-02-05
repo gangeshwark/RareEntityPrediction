@@ -141,7 +141,7 @@ def main():
     # paths
     home = os.path.expanduser('~')
     dataset_dir = '../dataset'
-    corpus_path = os.path.join(dataset_dir, 'all_data.json')
+    corpus_path = os.path.join(dataset_dir, 'all_data_unclean.json')
     desc_path = os.path.join(dataset_dir, 'name_desc.json')
     glove_path = os.path.join(home, 'data', 'glove', 'glove.840B.300d.txt')
 

@@ -11,7 +11,7 @@ np.random.seed(12345)
 
 home = os.path.expanduser('~')
 source_dir = os.path.join(home, 'data', 'rare_entity')
-dataset_dir = os.path.join('..', 'data')
+dataset_dir = os.path.join('..', 'data_new')
 
 prog = re.compile(r'(9202a8c04000641f8\w+)')
 special_character = re.compile(r'[^A-Za-z_\d,.\- ]', re.IGNORECASE)
@@ -94,7 +94,7 @@ def prepro_corpus(corpus_file, id_name, lower=False, num_cands=3):
     names = list(id_name.values())
     num_names = len(names)
     with open(corpus_file, 'r', encoding='utf-8') as fc:
-        for line in tqdm(fc, desc='process corpus file'):
+        for i, line in tqdm(enumerate(fc), desc='process corpus file'):
             line = line.strip().replace("``", '"').replace("''", '"')
             all_ids = prog.findall(line)
 
@@ -103,6 +103,7 @@ def prepro_corpus(corpus_file, id_name, lower=False, num_cands=3):
             #     continue
 
             candidates = [id_name[fb_id] for fb_id in all_ids]
+            candidates = list(set(candidates))
             sentences = sent_tokenize(line)  # split paragraph into sentences
 
             # filtered out sentences too short
@@ -143,11 +144,15 @@ def prepro_corpus(corpus_file, id_name, lower=False, num_cands=3):
                             cands += [names[rand]]
                     else:  # pick several from current candidates
                         cands += [ans]
-                        ans_idx = candidates.index(ans)
-                        tmp = candidates[:ans_idx] + candidates[ans_idx + 1:]
-                        np.random.shuffle(tmp)
-                        cands += tmp[:num_cands - 1]
+                        tmp = [x for x in candidates if x != ans]
+                        cands.extend(tmp[:2])
+
+                        # ans_idx = candidates.index(ans)
+                        # tmp = candidates[:ans_idx] + candidates[ans_idx + 1:]
+                        # np.random.shuffle(tmp)
+                        # cands += tmp[:num_cands - 1]
                     # shuffle candidates
+                    assert len(cands) == num_cands
                     np.random.shuffle(cands)
 
                     # obtain the second sentence as a supplementary
@@ -317,9 +322,9 @@ def main():
 
     """Build dataset"""
     id_name, name_desc, ent_vocab = prepro_entities(entities_path)
-    data, cor_vocab = prepro_corpus(corpus_path, id_name)
     entity_names = id_name.values()
     save_vocab(entity_names, entity_names_path)
+    data, cor_vocab = prepro_corpus(corpus_path, id_name)
     del id_name  # delete unused items to release space
 
     """Build and save words and chars vocabulary"""
