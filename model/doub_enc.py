@@ -59,10 +59,6 @@ class DoubEnc(object):
         print("self.s1.get_shape()", self.s1.get_shape())
         # shape = (batch_size)
         self.s1_seq_len = tf.placeholder(tf.int32, shape=[self.batch_size], name='sent1_seq_length')
-        # shape = (batch_size, max length of sentence in batch)
-        '''self.s2 = tf.placeholder(tf.int32, shape=[None, None], name='sent2')  # DoubEnc doesn't need this one'''
-        # shape = (batch_size)
-        '''self.s2_seq_len = tf.placeholder(tf.int32, shape=[None], name='sent2_seq_length')'''
         # shape = (batch_size, num_cands, max length of sentence in batch)
         self.desc = tf.placeholder(tf.int32, shape=[self.batch_size, 3, max_sent_len_desc], name='descriptions')
         # shape = (batch_size, num_cands)
@@ -74,12 +70,10 @@ class DoubEnc(object):
         # shape = (batch_size, num_candidates)
         self.y = tf.placeholder(tf.int32, shape=[self.batch_size, None], name='answer')
 
-    def _get_feed_dict(self, s1, desc, idx, cand, s2=None, y=None):
+    def _get_feed_dict(self, s1, desc, idx, cand, y=None):
         s1, s1_seq_len = pad_sequence(s1, max_length=self.s1_max_len, pad_tok=0, pad_left=True, nlevels=1)
         s1_seq_len = [x + 1 for x in s1_seq_len]
-        # if s2 is not None:
-        #    s2, s2_seq_len = pad_sequence(s2, max_length=max_sent_len, pad_tok=0, pad_left=True, nlevels=1)
-        desc, desc_seq_len = pad_sequence(desc, max_length=max_sent_len_desc, pad_tok=0, pad_left=True, nlevels=2)
+        desc, desc_seq_len = pad_sequence(desc, max_length_2=max_sent_len_desc, pad_tok=0, pad_left=True, nlevels=2)
         print(desc_seq_len)
         print(desc)
         feed_dict = {
@@ -89,9 +83,6 @@ class DoubEnc(object):
             self.desc_seq_len: desc_seq_len,
             self.idx: idx,
             self.cand: cand}
-        '''if s2 is not None:
-            feed_dict[self.s2] = s2
-            feed_dict[self.s2_seq_len] = s2_seq_len'''
         if y is not None:
             feed_dict[self.y] = y
         return feed_dict
@@ -100,16 +91,12 @@ class DoubEnc(object):
         with tf.variable_scope('embeddings'):
             _word_embedding = tf.Variable(load_embeddings(self.embedding_path), name='_word_embeddings',
                                           dtype=tf.float32, trainable=self.finetune_emb)
-            # self.s1l_emb = tf.nn.embedding_lookup(_word_embedding, self.s1l, name='sent1_left_emb')
-            # self.s1r_emb = tf.nn.embedding_lookup(_word_embedding, self.s1r, name='sent1_right_emb')
             self.s1_emb = tf.nn.embedding_lookup(_word_embedding, self.s1, name='sent1_emb')
-            # self.s2_emb = tf.nn.embedding_lookup(_word_embedding, self.s2, name='sent2_emb')
             self.desc_emb = tf.nn.embedding_lookup(_word_embedding, self.desc, name='desc_emb')
-            # self.desc_emb.set_shape([None, None, None, 300])
 
     def _build_model_op(self):
         with tf.variable_scope('lexical_encoder'):
-            lexical_cell = LSTMCell(num_units=self.num_units, state_is_tuple=True, use_peepholes=True)
+            lexical_cell = LSTMCell(num_units=self.num_units, use_peepholes=True)
             s = self.desc_emb.get_shape()
             print("s", s[0])
             print("self.desc_emb: ", self.desc_emb.get_shape())
@@ -153,7 +140,7 @@ class DoubEnc(object):
             s1_emb = tf.concat(merged_s1_list, axis=1)  # (batch, num_cands, max_sent_len, dim)
 
         with tf.variable_scope('context_encoder'):
-            context_cell = LSTMCell(num_units=self.num_units, state_is_tuple=True, use_peepholes=True)
+            context_cell = LSTMCell(num_units=self.num_units, use_peepholes=True)
             s_int = s1_emb.get_shape()
             s = tf.shape(s1_emb)
             print("s_int", s_int)
@@ -195,7 +182,7 @@ class DoubEnc(object):
             self.logger.info('Epoch %2d/%2d:' % (epoch, epochs))
             prog = Progbar(target=nbatches)  # nbatches
             for i, (s1, _, idx, desc, cand, y) in enumerate(batch_iter(dataset, batch_size)):
-                feed_dict = self._get_feed_dict(s1, desc, idx, cand, s2=None, y=y)
+                feed_dict = self._get_feed_dict(s1, desc, idx, cand, y=y)
                 _, train_loss = self.sess.run([self.train_op, self.loss], feed_dict=feed_dict)
                 prog.update(i + 1, [("train loss", train_loss)])
             # build evaluate
@@ -204,8 +191,8 @@ class DoubEnc(object):
     def evaluate(self, dataset, batch_size):
         nbatches = (len(dataset) + batch_size - 1) // batch_size
         acc = []
-        for s1, s2, idx, desc, cand, y in batch_iter(dataset, batch_size):
-            feed_dict = self._get_feed_dict(s1, desc, idx, cand, s2=None, y=y)
+        for s1, _, idx, desc, cand, y in batch_iter(dataset, batch_size):
+            feed_dict = self._get_feed_dict(s1, desc, idx, cand, y=y)
             batch_acc = self.sess.run(self.accuracy, feed_dict=feed_dict)
             acc.append(batch_acc)
         self.logger.info('Accuracy: {:04.2f}'.format(sum(acc) / nbatches * 100))
