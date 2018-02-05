@@ -74,8 +74,8 @@ class DoubEnc(object):
         s1, s1_seq_len = pad_sequence(s1, max_length=self.s1_max_len, pad_tok=0, pad_left=True, nlevels=1)
         s1_seq_len = [x + 1 for x in s1_seq_len]
         desc, desc_seq_len = pad_sequence(desc, max_length_2=max_sent_len_desc, pad_tok=0, pad_left=True, nlevels=2)
-        print(desc_seq_len)
-        print(desc)
+        # print(desc_seq_len)
+        # print(desc)
         feed_dict = {
             self.s1: s1,
             self.s1_seq_len: s1_seq_len,
@@ -127,9 +127,13 @@ class DoubEnc(object):
                 idx_list = tf.unstack(self.idx, axis=0)  # each: (1)
                 de_res_list = tf.unstack(de_res, axis=0)  # each: (num_units)
                 tmp_merged = []
+                print("len(idx_list)", len(idx_list))
+                print("type(idx_list)", type(idx_list))
+                # print("idx_list", idx_list)
                 for i in range(len(idx_list)):
                     lsz = self.s1_max_len - 1 - idx_list[i]  # left sent size
                     rsz = idx_list[i]  # right sent size
+                    # print("sz", lsz, rsz)
                     s1_emb_left, s1_emb_right = tf.split(s1_emb_list[i], num_or_size_splits=[lsz, rsz], axis=0)
                     de_tmp = tf.expand_dims(de_res_list[i], axis=0)  # (1, num_units)
                     s1 = tf.concat([s1_emb_left, de_tmp, s1_emb_right], axis=0)  # (max_sent_len, dim)

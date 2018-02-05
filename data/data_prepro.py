@@ -11,7 +11,7 @@ np.random.seed(12345)
 
 home = os.path.expanduser('~')
 source_dir = os.path.join(home, 'data', 'rare_entity')
-dataset_dir = os.path.join('..', 'data_new')
+dataset_dir = os.path.join('..', 'data_new2')
 
 prog = re.compile(r'(9202a8c04000641f8\w+)')
 special_character = re.compile(r'[^A-Za-z_\d,.\- ]', re.IGNORECASE)
@@ -262,9 +262,10 @@ def build_embeddings(vocab, emb_path, save_path, dim):
 def convert_to_index(data, vocab, entity_names, save_path, name):
     dataset = []
     for record in tqdm(data, desc='convert {} dataset to index'.format(name)):
-        record_idx = {"s1l": [vocab[word] if word in vocab else vocab[UNK] for word in record['s1l']],
-                      "s1r": [vocab[word] if word in vocab else vocab[UNK] for word in record['s1r']],
+        record_idx = {"s1": [vocab[word] if word in vocab else vocab[UNK] for word in record['s1']],
+                      # "s1r": [vocab[word] if word in vocab else vocab[UNK] for word in record['s1r']],
                       "s2": [vocab[word] if word in vocab else vocab[UNK] for word in record['s2']],
+                      "idx": record['idx'],
                       "c_ans": [entity_names[name] for name in record['c_ans']],
                       "ans": entity_names[record['ans']]}
         '''record_idx = {"s1": [vocab[word] if word in vocab else vocab[UNK] for word in record['s1']],

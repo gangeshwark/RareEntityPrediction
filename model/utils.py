@@ -23,6 +23,7 @@ def batch_iter(dataset, batch_size):
             else:
                 y.append(0)
         batch_y += [y]
+    # TODO: remove the batch which is less than batch_size. ie, the last batch.
     if len(batch_s1) != 0:
         yield batch_s1, batch_s2, batch_idx, batch_desc, batch_cand, batch_y
 
