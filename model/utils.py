@@ -8,7 +8,7 @@ def batch_iter(dataset, batch_size):
     batch_s1, batch_s2, batch_idx, batch_desc, batch_cand, batch_y = [], [], [], [], [], []
     for record in dataset:
         if len(batch_s1) == batch_size:
-            return batch_s1, batch_s2, batch_idx, batch_desc, batch_cand, batch_y
+            yield batch_s1, batch_s2, batch_idx, batch_desc, batch_cand, batch_y
             batch_s1, batch_s2, batch_idx, batch_desc, batch_cand, batch_y = [], [], [], [], [], []
         batch_s1 += [record['s1']]
         batch_s2 += [record['s2']]
@@ -25,7 +25,7 @@ def batch_iter(dataset, batch_size):
                 y.append(0)
         batch_y += [y]
     if len(batch_s1) != 0:
-        return batch_s1, batch_s2, batch_idx, batch_desc, batch_cand, batch_y
+        yield batch_s1, batch_s2, batch_idx, batch_desc, batch_cand, batch_y
     '''batch_s1l, batch_s1r, batch_s2, batch_desc, batch_cand, batch_y = [], [], [], [], [], []
     for record in dataset:
         if len(batch_s1l) == batch_size:

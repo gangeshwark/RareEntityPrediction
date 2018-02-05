@@ -133,7 +133,7 @@ def prepro_corpus(corpus_file, id_name, lower=False, num_cands=3):
                     if fst_sent.count(id_replace) > 1:
                         continue
 
-                    # create candidates set -- TODO add at 01/02/2018
+                    # create candidates set
                     cands = []
                     if len(candidates) < num_cands:  # pick candidates from all data
                         cands += candidates
@@ -183,9 +183,9 @@ def prepro_corpus(corpus_file, id_name, lower=False, num_cands=3):
                     if len(scd_sent) > max_sent_len:
                         scd_sent = scd_sent[:max_sent_len]
 
-                    # merge first sentences -- TODO add at 01/02/2018
-                    # blank_idx = len(fst_sent_right)  # since left pad
-                    # fst_sent = fst_sent_left + fst_sent_right
+                    # merge first sentences
+                    blank_idx = len(fst_sent_right)  # since left pad
+                    fst_sent = fst_sent_left + fst_sent_right
 
                     # count the words frequency
                     words = fst_sent_left + fst_sent_right + scd_sent
@@ -201,10 +201,10 @@ def prepro_corpus(corpus_file, id_name, lower=False, num_cands=3):
                               "s2": scd_sent,
                               "c_ans": cands,  # fix length with num_cands
                               "ans": ans}'''
-                    record = {'s1l': fst_sent_left,
-                              's1r': fst_sent_right,
+                    record = {'s1': fst_sent,
+                              # 's1r': fst_sent_right,
                               's2': scd_sent,
-                              # 'idx': blank_idx,
+                              'idx': blank_idx,
                               'c_ans': cands,
                               'ans': ans}
                     data.append(record)

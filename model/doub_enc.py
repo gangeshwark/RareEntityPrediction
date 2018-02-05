@@ -79,7 +79,7 @@ class DoubEnc(object):
         s1_seq_len = [x + 1 for x in s1_seq_len]
         # if s2 is not None:
         #    s2, s2_seq_len = pad_sequence(s2, max_length=max_sent_len, pad_tok=0, pad_left=True, nlevels=1)
-        desc, desc_seq_len = pad_sequence(desc, max_length=max_sent_len_desc, pad_tok=0, pad_left=True, nlevels=1)
+        desc, desc_seq_len = pad_sequence(desc, max_length=max_sent_len_desc, pad_tok=0, pad_left=True, nlevels=2)
         print(desc_seq_len)
         print(desc)
         feed_dict = {
