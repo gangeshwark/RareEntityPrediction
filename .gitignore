@@ -1,12 +1,4 @@
 .idea/
-data/chars.txt
-data/words.txt
-data/entity_names.txt
-data/name_desc.json
-data/train.json
-data/dev.json
-data/test.json
-data/glove.840B.300d.filtered.npz
 
 dataset/all_data_unclean.json
 dataset/id_name.json
@@ -15,3 +7,12 @@ dataset/__pycache__/
 dataset/chars.txt
 dataset/vocab.txt
 dataset/glove.840B.300d.filtered.npz
+dataset/entity_names.txt
+dataset/name_desc.json
+dataset/train.json
+dataset/dev.json
+dataset/test.json
+ckpt/
+ckpt1/
+ckpt2/
+ckpt3/

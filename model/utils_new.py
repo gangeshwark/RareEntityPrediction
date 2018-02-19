@@ -7,16 +7,19 @@ name_desc = load_json('dataset/name_desc.json')
 def batch_iter(dataset, batch_size):
     batch_sl, batch_sr, batch_desc, batch_cand, batch_y = [], [], [], [], []
     for record in dataset:
-        if len(batch_sl) == batch_size:
-            yield batch_sl, batch_sr, batch_desc, batch_cand, batch_y
-            batch_sl, batch_sr, batch_desc, batch_cand, batch_y = [], [], [], [], []
-        batch_sl += [record['cl']]
-        batch_sr += [record['cr']]
-        desc = [name_desc[str(can)] for can in record['c_ans']]
-        batch_desc += [desc]
-        batch_cand += [record['c_ans']]
-        y = [1 if x == record['ans'] else 0 for x in record['c_ans']]
-        batch_y += [y]
+        for can in record['c_ans']:
+            if len(batch_sl) == batch_size:
+                yield batch_sl, batch_sr, batch_desc, batch_cand, batch_y
+                batch_sl, batch_sr, batch_desc, batch_cand, batch_y = [], [], [], [], []
+            batch_sl += [record['cl']]
+            batch_sr += [record['cr']]
+            desc = name_desc[str(can)]
+            batch_desc += [desc]
+            batch_cand += [can]
+            if can == record['ans']:
+                batch_y += [1]
+            else:
+                batch_y += [0]
     if len(batch_sl) != 0:
         yield batch_sl, batch_sr, batch_desc, batch_cand, batch_y
 

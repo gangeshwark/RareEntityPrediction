@@ -3,7 +3,6 @@ import re
 import numpy as np
 from tqdm import tqdm
 from nltk import sent_tokenize, word_tokenize
-from nltk.corpus import stopwords
 from collections import OrderedDict
 import json
 
@@ -11,22 +10,17 @@ np.random.seed(12345)
 
 home = os.path.expanduser('~')
 source_dir = os.path.join(home, 'data', 'rare_entity')
-dataset_dir = os.path.join('..', 'data_new2')
+dataset_dir = os.path.join('..', 'dataset')
 
-prog = re.compile(r'(9202a8c04000641f8\w+)')
+id_finder = re.compile(r'(9202a8c04000641f8\w+)')
 special_character = re.compile(r'[^A-Za-z_\d,.\- ]', re.IGNORECASE)
-stops = set(stopwords.words("english"))
 
 id_replace = '__blank__'
 UNK = '_UNK_'
 PAD = '_PAD_'
 
 # according to statistical information
-max_sent_len = 100
-max_sent_len_desc = 60
-
-max_word_len = 40
-max_word_len_desc = 30
+max_sent_len = 60
 
 
 def clean_text(text, lower=False):
@@ -36,7 +30,6 @@ def clean_text(text, lower=False):
     text = special_character.sub('', text)
     # replace multiple spaces with single one.
     text = re.sub(' +', ' ', text)
-    # return the cleaned text
     return text
 
 
@@ -56,15 +49,12 @@ def prepro_entities(entity_file, lower=False):
         for line in tqdm(fe, desc='process entity file'):
             fb_id, *_, name, desc = line.strip().split('\t')  # fb_id, anchor_text, wiki_url, fb_name, and description
             # clean additional backspace
-            fb_id = fb_id.strip()
-            name = name.strip()
-            desc = desc.strip().replace("``", '"').replace("''", '"')
+            fb_id, name = fb_id.strip(), name.strip()
             desc = sent_tokenize(desc, language='english')[0]  # NLTK sentence tokenization, get first one
-            # clean and tokenize text
-            desc = word_tokenize(clean_text(desc, lower))
+            desc = word_tokenize(clean_text(desc, lower))  # clean and tokenize text
             # cut down sentences according to the threshold
-            if len(desc) > max_sent_len_desc:
-                desc = desc[:max_sent_len_desc]
+            if len(desc) > max_sent_len:
+                desc = desc[:max_sent_len]
             # record id and name pair
             id_name[fb_id] = name
             # record name and description pair
@@ -84,37 +74,43 @@ def prepro_corpus(corpus_file, id_name, lower=False, num_cands=3):
     names = list(id_name.values())
     num_names = len(names)
     with open(corpus_file, 'r', encoding='utf-8') as fc:
-        for i, line in tqdm(enumerate(fc), desc='process corpus file'):
+        for _, line in tqdm(enumerate(fc), desc='process corpus file'):
             line = line.strip().replace("``", '"').replace("''", '"')
-            all_ids = prog.findall(line)
+            all_ids = id_finder.findall(line)
             candidates = [id_name[fb_id] for fb_id in all_ids]
             candidates = list(set(candidates))
             sentences = sent_tokenize(line)  # split paragraph into sentences
             # filtered out sentences too short
             sentences = [sent for sent in sentences if len(sent) >= 10]
             for i in range(len(sentences)):
-                if not prog.search(sentences[i]):  # if no freebase ids are contained, ignore this sentence
+                if not id_finder.search(sentences[i]):  # if no freebase ids are contained, ignore this sentence
                     continue
-
-                sent_ids = prog.findall(sentences[i])  # obtain all freebase ids in a sentence
-
+                sent_ids = id_finder.findall(sentences[i])  # obtain all freebase ids in a sentence
                 for fb_id in sent_ids:
                     ans = id_name[fb_id]
                     other_ids = [x for x in sent_ids if x != fb_id]  # get other freebase ids
-
-                    fst_sent = sentences[i].replace(fb_id, id_replace)  # replace target id with __blank__
+                    sent = sentences[i].replace(fb_id, id_replace)  # replace target id with __blank__
                     for sub_id in other_ids:
-                        fst_sent = fst_sent.replace(sub_id, id_name[sub_id])  # replace other ids with actual name
-
-                    # clean first sentence
-                    fst_sent = clean_text(fst_sent, lower)
-
-                    # convert sentence into words list
-                    fst_sent = word_tokenize(fst_sent)
-
+                        sent = sent.replace(sub_id, id_name[sub_id])  # replace other ids with actual name
+                    # clean and tokenize sentence
+                    sent = word_tokenize(clean_text(sent, lower))
                     # if contains more than one __blank__ ignore
-                    if fst_sent.count(id_replace) > 1:
+                    if sent.count(id_replace) > 1:
                         continue
+
+                    # supplementary information
+                    pre_sent = None if i == 0 else sentences[i - 1]
+                    if pre_sent is not None:
+                        for sub_id in id_finder.findall(pre_sent):
+                            pre_sent = pre_sent.replace(sub_id, id_name[sub_id])
+                        pre_sent = word_tokenize(clean_text(pre_sent, lower))
+                        sent = pre_sent + sent
+                    nxt_sent = None if i == len(sentences) - 1 else sentences[i + 1]
+                    if nxt_sent is not None:
+                        for sub_id in id_finder.findall(nxt_sent):
+                            nxt_sent = nxt_sent.replace(sub_id, id_name[sub_id])
+                        nxt_sent = word_tokenize(clean_text(nxt_sent, lower))
+                        sent = sent + nxt_sent
 
                     # create candidates set
                     cands = []
@@ -128,41 +124,20 @@ def prepro_corpus(corpus_file, id_name, lower=False, num_cands=3):
                     else:  # pick several from current candidates
                         cands += [ans]
                         tmp = [x for x in candidates if x != ans]
-                        cands.extend(tmp[:2])
+                        cands += tmp[:2]
                     # shuffle candidates
                     assert len(cands) == num_cands
                     np.random.shuffle(cands)
 
-                    # obtain the second sentence as a supplementary
-                    scd_sent = sentences[i + 1] if i < len(sentences) - 1 else sentences[i - 1]
-                    sub_ids = prog.findall(scd_sent)
-                    for sub_id in sub_ids:
-                        scd_sent = scd_sent.replace(sub_id, id_name[sub_id])
-                    # clean and tokenize second sentences
-                    scd_sent = word_tokenize(clean_text(scd_sent, lower))
-
-                    blank_idx = fst_sent.index(id_replace)  # __blank__ index
+                    blank_idx = sent.index(id_replace)  # __blank__ index
                     # split first sentence into two parts according to the position of __blank__
-                    fst_sent_left = fst_sent[:blank_idx]
-                    fst_sent_right = fst_sent[blank_idx + 1:]
-
-                    # cut down the sentence
-                    if len(fst_sent_left) + len(fst_sent_right) + 1 > max_sent_len:
-                        left_cut = int(max_sent_len / 2)
-                        right_cut = max_sent_len - left_cut - 1
-                        if len(fst_sent_left) > left_cut:
-                            fst_sent_left = fst_sent_left[-left_cut:]
-                        if len(fst_sent_right) > right_cut:
-                            fst_sent_right = fst_sent_right[:right_cut]
-                    if len(scd_sent) > max_sent_len:
-                        scd_sent = scd_sent[:max_sent_len]
-
-                    # merge first sentences
-                    blank_idx = len(fst_sent_right)  # since left pad
-                    fst_sent = fst_sent_left + fst_sent_right
+                    left_cut = max(0, blank_idx - max_sent_len)
+                    right_cut = min(len(sent), blank_idx + 1 + max_sent_len)
+                    sent_left = sent[left_cut:blank_idx]
+                    sent_right = sent[blank_idx + 1:right_cut]
 
                     # count the words frequency
-                    words = fst_sent_left + fst_sent_right + scd_sent
+                    words = sent_left + sent_right
                     for word in words:
                         if word in word_count:
                             word_count[word] += 1
@@ -170,18 +145,12 @@ def prepro_corpus(corpus_file, id_name, lower=False, num_cands=3):
                             word_count[word] = 1
 
                     # store each record into dict
-                    '''record = {"s1l": fst_sent_left,
-                              "s1r": fst_sent_right,
-                              "s2": scd_sent,
+                    record = {"sl": sent_left,
+                              "sr": sent_right,
                               "c_ans": cands,  # fix length with num_cands
-                              "ans": ans}'''
-                    record = {'s1': fst_sent,
-                              # 's1r': fst_sent_right,
-                              's2': scd_sent,
-                              'idx': blank_idx,
-                              'c_ans': cands,
-                              'ans': ans}
+                              "ans": ans}
                     data.append(record)
+
     np.random.shuffle(data)
     return data, word_count
 
@@ -262,17 +231,10 @@ def build_embeddings(vocab, emb_path, save_path, dim):
 def convert_to_index(data, vocab, entity_names, save_path, name):
     dataset = []
     for record in tqdm(data, desc='convert {} dataset to index'.format(name)):
-        record_idx = {"s1": [vocab[word] if word in vocab else vocab[UNK] for word in record['s1']],
-                      # "s1r": [vocab[word] if word in vocab else vocab[UNK] for word in record['s1r']],
-                      "s2": [vocab[word] if word in vocab else vocab[UNK] for word in record['s2']],
-                      "idx": record['idx'],
+        record_idx = {"cl": [vocab[word] if word in vocab else vocab[UNK] for word in record['sl']],
+                      "cr": [vocab[word] if word in vocab else vocab[UNK] for word in record['sr']],
                       "c_ans": [entity_names[name] for name in record['c_ans']],
                       "ans": entity_names[record['ans']]}
-        '''record_idx = {"s1": [vocab[word] if word in vocab else vocab[UNK] for word in record['s1']],
-                      "s2": [vocab[word] if word in vocab else vocab[UNK] for word in record['s2']],
-                      "idx": record['idx'],
-                      "c_ans": [entity_names[name] for name in record['c_ans']],
-                      "ans": entity_names[record['ans']]}'''
         dataset.append(record_idx)
     json_dump(dataset, save_path)
     del dataset
@@ -297,9 +259,9 @@ def main():
 
     """Build dataset"""
     id_name, name_desc, ent_vocab = prepro_entities(entities_path)
+    data, cor_vocab = prepro_corpus(corpus_path, id_name)
     entity_names = id_name.values()
     save_vocab(entity_names, entity_names_path)
-    data, cor_vocab = prepro_corpus(corpus_path, id_name)
     del id_name  # delete unused items to release space
 
     """Build and save words and chars vocabulary"""
