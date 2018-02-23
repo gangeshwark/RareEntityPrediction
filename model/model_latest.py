@@ -73,9 +73,13 @@ class Model(object):
 
     def _build_model_op(self):
         with tf.variable_scope('embeddings'):
-            _word_emb = tf.Variable(self.config.emb, name='_word_emb', dtype=tf.float32,
-                                    trainable=self.config.finetune_emb)
-            self.sl_emb = tf.nn.embedding_lookup(_word_emb, self.sl, name='sent_left_emb')
+            if self.config.use_pretrained:
+                _word_emb = tf.Variable(self.config.emb, name='_word_emb', dtype=tf.float32,
+                                        trainable=self.config.finetune_emb)
+            else:
+                _word_emb = tf.get_variable(name='_word_emb', shape=[self.config.vocab_size, self.config.word_dim],
+                                            dtype=tf.float32)
+            self.sl_emb = tf.nn.embedding_lookup(_word_emb, self.sl, name='sent_emb')
             self.sr_emb = tf.nn.embedding_lookup(_word_emb, self.sr, name='sent_right_emb')
             self.desc_emb = tf.nn.embedding_lookup(_word_emb, self.desc, name='desc_emb')
 

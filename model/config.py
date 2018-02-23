@@ -1,6 +1,6 @@
 import os
 from model.logger import get_logger
-from model.utils import load_embeddings
+from model.utils_latest import load_embeddings, load_vocab
 
 
 class Config(object):
@@ -9,13 +9,16 @@ class Config(object):
             os.makedirs(self.ckpt_path)
         self.logger = get_logger(self.log_file)
         self.emb = load_embeddings(self.emb_file)
-        # self.emb = load_embeddings(self.emb_file)
+        self.word_vocab, _ = load_vocab(self.word_vocab_file)
+        self.vocab_size = len(self.word_vocab)
 
     __head_dir = 'dataset'
     train_file = os.path.join(__head_dir, 'train.json')
     dev_file = os.path.join(__head_dir, 'dev.json')
     test_file = os.path.join(__head_dir, 'test.json')
     emb_file = os.path.join(__head_dir, 'glove.840B.300d.filtered.npz')
+    word_vocab_file = os.path.join(__head_dir, 'words.txt')
+    use_pretrained = True
     finetune_emb = True
     word_dim = 300
 
