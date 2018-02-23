@@ -12,6 +12,7 @@ dataset/name_desc.json
 dataset/train.json
 dataset/dev.json
 dataset/test.json
+dataset/previous/
 ckpt/
 ckpt1/
 ckpt2/
